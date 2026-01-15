@@ -1,4 +1,8 @@
 import cv2
+import numpy as np
+
+CARD_WIDTH = 200
+CARD_HEIGHT = 300
 
 class CardDetector:
     """
@@ -44,7 +48,22 @@ class CardDetector:
                 x = approx.ravel()[0]
                 y = approx.ravel()[1] - 10
                 cv2.putText(frame, "Card Detected", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 1)
+                return approx
+        return None
+
+    @staticmethod
+    def picture_transform(frame, approx):
+        src_pts = np.float32(approx.reshape(4, 2))
+        dst_pts = np.float32([[0, 0], [CARD_WIDTH, 0], [CARD_WIDTH, CARD_HEIGHT], [0, CARD_HEIGHT]])
+
+        m = cv2.getPerspectiveTransform(src_pts, dst_pts)
+        warped_img = cv2.warpPerspective(frame, m, (CARD_WIDTH, CARD_HEIGHT))
+        return warped_img
 
     def detect(self, frame):
         thresh = self.pre_image_process(frame)
-        self.find_contours(frame, thresh)
+        card_approx = self.find_contours(frame, thresh)
+        if card_approx is not None:
+            detected_img = self.picture_transform(frame, card_approx)
+            return detected_img
+        return None
