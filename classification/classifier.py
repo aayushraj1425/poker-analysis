@@ -29,7 +29,7 @@ class CardClassifier:
 
     def classify(self, warped_card):
         """
-        Classify the given card.l
+        Classify the detected card.
         """
         corner = self.extract_corner(warped_card)
         processed_corner = self.preprocess_corner(corner)

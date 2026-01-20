@@ -17,6 +17,3 @@ if user_input == "y":
 
     cap.release()
     cv2.destroyAllWindows()
-
-
-

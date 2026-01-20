@@ -4,6 +4,7 @@ import numpy as np
 CARD_WIDTH = 200
 CARD_HEIGHT = 300
 
+
 class CardDetector:
     """
     Detects playing cards in a video frame.
@@ -14,11 +15,23 @@ class CardDetector:
         """
         Converts frame to a binary image.
         """
-        gray_img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blur_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blur_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-        return thresh
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        _, thresh = cv2.threshold(blur, 225, 255, cv2.THRESH_BINARY)
+
+        v = np.median(blur)
+        lower = int(max(0, 0.66 * v))
+        upper = int(min(255, 1.33 * v))
+        edges = cv2.Canny(blur, lower, upper)
+
+        kernel = np.ones((3, 3), np.uint8)
+        edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+
+        combined = cv2.bitwise_or(thresh, edges_closed)
+
+        return combined
 
     @staticmethod
     def find_contours(frame, thresh):
@@ -53,16 +66,20 @@ class CardDetector:
 
     @staticmethod
     def picture_transform(frame, approx):
+        """
+        Transforms the Detected image into a separate one.
+        """
         src_pts = np.float32(approx.reshape(4, 2))
         dst_pts = np.float32([[0, 0], [CARD_WIDTH, 0], [CARD_WIDTH, CARD_HEIGHT], [0, CARD_HEIGHT]])
 
         m = cv2.getPerspectiveTransform(src_pts, dst_pts)
-        warped_img = cv2.warpPerspective(frame, m, (CARD_WIDTH, CARD_HEIGHT))
-        return warped_img
+        warped_card = cv2.warpPerspective(frame, m, (CARD_WIDTH, CARD_HEIGHT))
+        return warped_card
 
     def detect(self, frame):
         thresh = self.pre_image_process(frame)
         card_approx = self.find_contours(frame, thresh)
+        cv2.imshow("Thresh", thresh)
         if card_approx is not None:
             detected_img = self.picture_transform(frame, card_approx)
             return detected_img
