@@ -1,9 +1,8 @@
 import cv2
 import numpy as np
 
-CARD_WIDTH = 200
-CARD_HEIGHT = 300
-
+CARD_WIDTH = 120
+CARD_HEIGHT = 175
 
 class CardDetector:
     """
@@ -17,17 +16,21 @@ class CardDetector:
         """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray_clahe = clahe.apply(gray)
+
+        blur = cv2.GaussianBlur(gray_clahe, (5, 5), 0)
 
         _, thresh = cv2.threshold(blur, 225, 255, cv2.THRESH_BINARY)
 
-        v = np.median(blur)
-        lower = int(max(0, 0.66 * v))
-        upper = int(min(255, 1.33 * v))
+        v_low, v_high = np.percentile(blur, [25, 75])
+        lower = int(v_low)
+        upper = int(v_high)
         edges = cv2.Canny(blur, lower, upper)
 
         kernel = np.ones((3, 3), np.uint8)
-        edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+        edges_dilated = cv2.dilate(edges, cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2)), iterations=1)
+        edges_closed = cv2.morphologyEx(edges_dilated, cv2.MORPH_CLOSE, kernel)
 
         combined = cv2.bitwise_or(thresh, edges_closed)
 
@@ -65,6 +68,37 @@ class CardDetector:
         return None
 
     @staticmethod
+    def draw_rectangle(frame, start_point, end_point):
+        """
+        Draws rectangle in the center of the frame.
+        """
+
+        color = (255, 0, 0)
+        thickness = 2
+
+        cv2.rectangle(frame, start_point, end_point, color, thickness)
+
+    def frame_crop_detect(self, frame):
+        """
+        Crops the image inside the rectangle and detects card.
+        """
+        h, w = frame.shape[:2]
+        start_point = (int(w / 2 - CARD_WIDTH / 2), int(h / 2 - CARD_HEIGHT / 2))
+        end_point = (int(start_point[0] + CARD_WIDTH), int(start_point[1] + CARD_HEIGHT))
+        self.draw_rectangle(frame, start_point, end_point)
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+        card_approx = self.find_contours(frame, thresh)
+
+        if card_approx is not None:
+            detected_img = self.picture_transform(frame, card_approx)
+            return detected_img
+        return None
+
+    @staticmethod
     def picture_transform(frame, approx):
         """
         Transforms the Detected image into a separate one.
@@ -77,6 +111,9 @@ class CardDetector:
         return warped_card
 
     def detect(self, frame):
+        """
+        Detects the card in the image.
+        """
         thresh = self.pre_image_process(frame)
         card_approx = self.find_contours(frame, thresh)
         cv2.imshow("Thresh", thresh)
